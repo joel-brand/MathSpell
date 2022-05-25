@@ -5,6 +5,7 @@ from pylatex.base_classes import Environment
 from pylatex.package import Package
 from pylatex import Document, Section
 from latex import create_pdf
+import sys
 
 class TermNode:
 
@@ -76,6 +77,13 @@ def divide(value, allowed_divisors):
     return value * divisor, divisor
 
 
+def easy_divide(value):
+    if value > 12:
+        return None
+    divisor = np.random.randint(2, 12)
+    return value * divisor, divisor
+
+
 def multiply_factor_leq_12(value):
     return multiply(value, lambda factors: factors[0] <= 12 or factors[1] <= 12)
 
@@ -126,9 +134,9 @@ def get_predefined_multiply_factors():
 
 
 def add(value):
-    if value == 0:
+    if value <= 1:
         return None
-    left = value - np.random.randint(value)
+    left = value - np.random.randint(1, value-1)
     return left, value-left
 
 
@@ -157,18 +165,20 @@ def generate_eqn(op_list, target, max_terms=2):
     init_node.right.split(op_list)
     return init_node.to_string()
 
+
 class AmsMath(Environment):
     packages = [Package("amsmath")]
 
-def run():
+
+def run(phrase, pdf_title, pdf_name="mathspell"):
     predefined_multiply_factors = get_predefined_multiply_factors()
     op_list = [
         Operation("*", partial(multiply_predefined, multiply_map=predefined_multiply_factors)),
-        Operation("/", divide_divisor_leq_12),
+        Operation("/", easy_divide),
         Operation("+", add),
         Operation("-", subtract)
     ]
-    phrase = "this is a test"
+    phrase = phrase.lower()
     phrase_words = phrase.split()
     phrase_letters = "".join(phrase_words)
     encoding = encode_phrase(phrase_letters)
@@ -179,8 +189,8 @@ def run():
         with doc.create(AmsMath()):
             test = ""
 
-    create_pdf(encoding, equations)
+    create_pdf(pdf_title, pdf_name, phrase_words, encoding, equations)
 
 
 if __name__ == '__main__':
-    run()
+    run(sys.argv[1], sys.argv[2])
