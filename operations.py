@@ -1,6 +1,7 @@
 import numpy as np
 import math
 
+
 class Operation:
 
     def __init__(self, symbol, split_function):
@@ -28,15 +29,17 @@ class OperationList:
 
     def split(self, value):
         for operation in np.random.choice(self.all_operations, size=len(self.all_operations), replace=False,
-                                     p=self.all_probabilities):
-            return operation.split(value)
+                                          p=self.all_probabilities):
+            result = operation.split(value)
+            if result is not None:
+                return result
 
 
 class OperandList:
-
     TYPE_MULTIPLICATION = "*"
     TYPE_DIVISION = "/"
     TYPE_ADDITION = "+"
+    TYPE_SUBTRACTION = "-"
 
     def __init__(self, list_type):
         self.list_type = list_type
@@ -52,6 +55,8 @@ class OperandList:
             return self.make_division_operation()
         elif self.list_type == OperandList.TYPE_ADDITION:
             return self.make_addition_operation()
+        elif self.list_type == OperandList.TYPE_SUBTRACTION:
+            return self.make_subtraction_operation()
 
     def make_multiplication_operation(self):
         def split(value):
@@ -61,6 +66,7 @@ class OperandList:
                     if (op_1.matches(fact_1) and op_2.matches(fact_2)) or (
                             op_1.matches(fact_2) and op_2.matches(fact_1)):
                         return [fact_1, fact_2]
+
         return Operation("*", split)
 
     def make_division_operation(self):
@@ -69,18 +75,32 @@ class OperandList:
                 for divisor in op_2.get_shuffled_range():
                     if op_1.matches(value * divisor):
                         return [value * divisor, divisor]
+
         return Operation("/", split)
 
     def make_addition_operation(self):
         def split(value):
             for (op_1, op_2) in np.random.permutation(self.all_operand_pairs):
                 left_low = max(value - op_2.high, 0)
-                left_high = value - op_2.low
+                left_high = max(value - op_2.low, 0)
                 for left in op_1.get_shuffled_intersecting_range(left_low, left_high):
                     right = value - left
                     if op_2.matches(right):
                         return [left, right]
+
         return Operation("+", split)
+
+    def make_subtraction_operation(self):
+        def split(value):
+            for (op_1, op_2) in np.random.permutation(self.all_operand_pairs):
+                left_low = value + op_2.low
+                left_high = value + op_2.high
+                for left in op_1.get_shuffled_intersecting_range(left_low, left_high):
+                    right = left - value
+                    if op_2.matches(right):
+                        return [left, right]
+
+        return Operation("-", split)
 
 
 class Operand:
@@ -121,15 +141,15 @@ class Operand:
                 raise "Operand list specifier must contain integers"
 
     def get_shuffled_range(self):
-        return np.random.permutation(range(self.low, self.high+1, self.step))
+        return np.random.permutation(range(self.low, self.high + 1, self.step))
 
     def get_shuffled_intersecting_range(self, low, high):
         if self.step == 1:
-            intersection_range = range(max(self.low, low), min(self.high, high)+1)
+            intersection_range = range(max(self.low, low), min(self.high, high) + 1)
         else:
             intersection_low = math.ceil(max(self.low, low) / self.step) * self.step
             intersection_high = math.ceil(min(self.high, high) / self.step) * self.step
-            intersection_range = range(intersection_low, intersection_high+1, self.step)
+            intersection_range = range(intersection_low, intersection_high + 1, self.step)
         return np.random.permutation(intersection_range)
 
 
@@ -175,17 +195,16 @@ def parse_operation_list(file_name, all_operations):
     return result
 
 
-
 def add(value):
     if value <= 1:
         return None
-    left = value - np.random.randint(1, value-1)
-    return left, value-left
+    left = value - np.random.randint(1, value - 1)
+    return left, value - left
 
 
 def subtract(value):
     right = np.random.randint(100)
-    return value+right, right
+    return value + right, right
 
 
 def sqrt(value):
