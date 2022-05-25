@@ -3,6 +3,9 @@ from latex import create_pdf
 from term_tree import TermNode
 from operations import parse_operation_list
 from collections import deque
+import shlex
+import prompt_toolkit
+import os.path
 
 
 def encode_phrase(phrase):
@@ -33,9 +36,7 @@ def generate_eqn(splitter, target, max_terms=4):
     return init_node.to_string()
 
 
-def generate(cached_operation_list, phrase, op_file, pdf_title="", pdf_name="math_spell"):
-
-    splitter = parse_operation_list(op_file, cached_operation_list)
+def generate(splitter, phrase, pdf_title=None, pdf_name=None):
 
     phrase = phrase.lower()
 
@@ -43,21 +44,39 @@ def generate(cached_operation_list, phrase, op_file, pdf_title="", pdf_name="mat
     phrase_letters = "".join(phrase_words)
     encoding = encode_phrase(phrase_letters)
 
+    if pdf_name is None:
+        i = 0
+        pdf_name = "math_spell"
+        while os.path.isfile(pdf_name + ".pdf"):
+            i += 1
+            pdf_name = "math_spell{0}".format(i)
+
     equations = [generate_eqn(splitter, encoding[c]) for c in phrase_letters]
 
     create_pdf(pdf_title, pdf_name, phrase_words, encoding, equations)
 
 
 if __name__ == '__main__':
-    generate(dict(), "this is a test", "example/example.oplist", "Math 8E 26th May")
-    # while True:
-    #     operation_list = dict()
-    #     cmd = shlex.split(prompt_toolkit.prompt("> "))
-    #     if len(cmd) == 0:
-    #         continue
-    #     if cmd[0] == "exit":
-    #         break
-    #     if len(cmd) > 4:
-    #         print("Invalid command - format should be " +
-    #               "'\"<PHRASE>\" \"<OP_FILE>\" \"<(Optional)PDF_TITLE>\" \"<(Optional)PDF_NAME>\"")
-    #     generate(operation_list, *cmd)
+    cached_operations = dict()
+    current_splitter = None
+    while True:
+        cmd = shlex.split(prompt_toolkit.prompt("> "))
+        k = len(cmd)
+        if k == 0:
+            continue
+        elif cmd[0] == "$exit":
+            break
+        elif cmd[0] == "$op_file":
+            if k != 2:
+                print("Invalid command - \\op_file takes one argument")
+                continue
+            op_file = cmd[1]
+            current_splitter = parse_operation_list(op_file, cached_operations)
+        else:
+            if current_splitter is None:
+                print("Please set an operations file first")
+                continue
+            if k > 3:
+                print("Invalid command - format should be " +
+                      "'\"<PHRASE>\" \"<(Optional)PDF_TITLE>\" \"<(Optional)PDF_NAME>\"")
+            generate(current_splitter, *cmd)

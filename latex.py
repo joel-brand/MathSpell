@@ -27,7 +27,8 @@ def create_pdf(title, pdf_name, phrase_words, phrase_encoding, equations_list):
 
     doc = Document(page_numbers=False)
 
-    doc.append(bold(title))
+    if title is not None:
+        doc.append(bold(title))
 
     # Print equations in  two columns
     with doc.create(MultiCols(arguments="2")):
