@@ -1,5 +1,5 @@
 import numpy as np
-
+import math
 
 class Operation:
 
@@ -36,6 +36,7 @@ class OperandList:
 
     TYPE_MULTIPLICATION = "*"
     TYPE_DIVISION = "/"
+    TYPE_ADDITION = "+"
 
     def __init__(self, list_type):
         self.list_type = list_type
@@ -49,6 +50,8 @@ class OperandList:
             return self.make_multiplication_operation()
         elif self.list_type == OperandList.TYPE_DIVISION:
             return self.make_division_operation()
+        elif self.list_type == OperandList.TYPE_ADDITION:
+            return self.make_addition_operation()
 
     def make_multiplication_operation(self):
         def split(value):
@@ -67,6 +70,17 @@ class OperandList:
                     if op_1.matches(value * divisor):
                         return [value * divisor, divisor]
         return Operation("/", split)
+
+    def make_addition_operation(self):
+        def split(value):
+            for (op_1, op_2) in np.random.permutation(self.all_operand_pairs):
+                left_low = max(value - op_2.high, 0)
+                left_high = value - op_2.low
+                for left in op_1.get_shuffled_intersecting_range(left_low, left_high):
+                    right = value - left
+                    if op_2.matches(right):
+                        return [left, right]
+        return Operation("+", split)
 
 
 class Operand:
@@ -108,6 +122,15 @@ class Operand:
 
     def get_shuffled_range(self):
         return np.random.permutation(range(self.low, self.high+1, self.step))
+
+    def get_shuffled_intersecting_range(self, low, high):
+        if self.step == 1:
+            intersection_range = range(max(self.low, low), min(self.high, high)+1)
+        else:
+            intersection_low = math.ceil(max(self.low, low) / self.step) * self.step
+            intersection_high = math.ceil(min(self.high, high) / self.step) * self.step
+            intersection_range = range(intersection_low, intersection_high+1, self.step)
+        return np.random.permutation(intersection_range)
 
 
 def factorise(value, include_one=False):
