@@ -1,0 +1,12 @@
+1;squares.op;0.2
+1;-;0.8
+2;roots.op;0.2
+2;-;0.8
+3;multiplication.op;0.3
+3;division.op;0.3
+3;addition.op;0.2
+3;subtraction.op;0.2
+4;fallback_addition.op;0.25
+4;fallback_subtraction.op;0.25
+4;fallback_division.op;0.25
+4;fallback_multiplication.op;0.25

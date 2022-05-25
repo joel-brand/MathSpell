@@ -4,15 +4,20 @@ import math
 
 class Operation:
 
-    def __init__(self, symbol, split_function, do_not_expand=False):
+    def __init__(self, symbol, split_function, lock_left=False, lock_right=False):
         self.symbol = symbol
         self.split_function = split_function
-        self.do_not_expand = do_not_expand
+        self.lock_left = lock_left
+        self.lock_right = lock_right
 
     def split(self, value):
         result = self.split_function(value)
         if result is not None:
-            return result + [self.symbol, self.do_not_expand]
+            return result + [self.symbol, self.lock_left, self.lock_right]
+
+    @staticmethod
+    def get_null_operation():
+        return Operation(None, lambda value: None)
 
 
 class OperationList:
@@ -21,22 +26,33 @@ class OperationList:
         self.all_operations = list()
         self.all_probabilities = list()
 
-    def add_operation(self, operation, probability):
-        self.all_operations.append(operation)
+    def ensure_level_created(self, level):
+        for i in range(level - len(self.all_operations)):
+            self.all_operations.append(list())
+            self.all_probabilities.append(list())
+
+    def add_operation(self, operation, level, probability):
+        self.ensure_level_created(level)
+        self.all_operations[level-1].append(operation)
         try:
-            self.all_probabilities.append(float(probability))
+            self.all_probabilities[level-1].append(float(probability))
         except ValueError:
             raise "Probability must be a valid decimal"
 
     def split(self, value):
-        for operation in np.random.choice(self.all_operations, size=len(self.all_operations), replace=False,
-                                          p=self.all_probabilities):
-            result = operation.split(value)
-            if result is not None:
-                return result
+        for level_operations, level_probabilities in zip(self.all_operations, self.all_probabilities):
+            k = len(level_operations)
+            for operation in np.random.choice(level_operations, k, replace=False, p=level_probabilities):
+                result = operation.split(value)
+                if result is not None:
+                    return result
+                if operation.symbol is None:
+                    # The "empty" operation breaks to the next level
+                    break
 
 
 class OperandList:
+
     TYPE_MULTIPLICATION = "*"
     TYPE_DIVISION = "/"
     TYPE_ADDITION = "+"
@@ -66,6 +82,7 @@ class OperandList:
             return self.make_inverse_exponentiation_operation()
 
     def make_multiplication_operation(self):
+
         def split(value):
             all_factorisations = factorise(value)
             for (fact_1, fact_2) in np.random.permutation(all_factorisations):
@@ -74,18 +91,26 @@ class OperandList:
                             op_1.matches(fact_2) and op_2.matches(fact_1)):
                         return [fact_1, fact_2]
 
-        return Operation("*", split)
+        def symbol(l, r):
+            return "{{{0}}}\\times{{{1}}}".format(l, r)
+
+        return Operation(symbol, split)
 
     def make_division_operation(self):
+
         def split(value):
             for (op_1, op_2) in np.random.permutation(self.all_operand_pairs):
                 for divisor in op_2.get_shuffled_range():
                     if op_1.matches(value * divisor):
                         return [value * divisor, divisor]
 
-        return Operation("/", split)
+        def divide_symbol(l, r):
+            return "{{{0}}}\div{{{1}}}".format(l, r)
+
+        return Operation(divide_symbol, split)
 
     def make_addition_operation(self):
+
         def split(value):
             for (op_1, op_2) in np.random.permutation(self.all_operand_pairs):
                 left_low = max(value - op_2.high, 0)
@@ -95,9 +120,13 @@ class OperandList:
                     if op_2.matches(right):
                         return [left, right]
 
-        return Operation("+", split)
+        def symbol(l, r):
+            return "{{{0}}}+{{{1}}}".format(l, r)
+
+        return Operation(symbol, split)
 
     def make_subtraction_operation(self):
+
         def split(value):
             for (op_1, op_2) in np.random.permutation(self.all_operand_pairs):
                 left_low = value + op_2.low
@@ -107,9 +136,13 @@ class OperandList:
                     if op_2.matches(right):
                         return [left, right]
 
-        return Operation("-", split)
+        def symbol(l, r):
+            return "{{{0}}}-{{{1}}}".format(l,r)
+
+        return Operation(symbol, split)
 
     def make_exponentiation_operation(self):
+
         def split(value):
             for (op_1, op_2) in np.random.permutation(self.all_operand_pairs):
                 for exponent in op_2.get_shuffled_range():
@@ -119,9 +152,14 @@ class OperandList:
                     base = int(base)
                     if op_1.matches(base):
                         return [base, exponent]
-        return Operation("^", split, do_not_expand=True)
+
+        def symbol(l, r):
+            return "{{{0}}}^{{{1}}}".format(l, r)
+
+        return Operation(symbol, split, lock_right=True)
 
     def make_inverse_exponentiation_operation(self):
+
         def split(value):
             for (op_1, op_2) in np.random.permutation(self.all_operand_pairs):
                 for exponent in op_2.get_shuffled_range():
@@ -130,8 +168,15 @@ class OperandList:
                         continue
                     base = int(base)
                     if op_1.matches(base):
-                        return [base, 1/exponent]
-        return Operation("^", split, do_not_expand=True)
+                        return [exponent, base]
+
+        def symbol(l, r):
+            if l == "2":
+                return "\sqrt{{{0}}}".format(r)
+            else:
+                return "\sqrt[{0}]{{{1}}}".format(l, r)
+
+        return Operation(symbol, split, lock_left=True)
 
 
 class Operand:
@@ -213,16 +258,25 @@ def parse_operation_list(file_name, all_operations):
     with open(file_name, "r") as f:
         for line_no, line in enumerate(f):
             tokens = line.rstrip().split(";")
-            if len(tokens) != 2:
-                raise "Malformed line ({}) in {} - expected two tokens".format(line_no, file_name)
-            operation_file = tokens[0]
-            operation_probability = tokens[1]
-            if operation_file not in all_operations:
-                # Only parse the operation file if we haven't already done so
-                all_operations[operation_file] = parse_operand_list(operation_file).make_operation()
-            result.add_operation(all_operations[operation_file], operation_probability)
-    if not sum(result.all_probabilities) == 1:
-        raise "Operation probabilities must sum to 1"
+            if len(tokens) != 3:
+                raise "Malformed line ({}) in {} - expected three tokens".format(line_no, file_name)
+            try:
+                operation_level = int(tokens[0])
+                operation_file = tokens[1]
+                operation_probability = float(tokens[2])
+            except ValueError:
+                raise "Malformed line ({}) in {} - invalid token type detected".format(line_no, file_name)
+            if operation_file == "-":
+                operation = Operation.get_null_operation()
+            else:
+                if operation_file not in all_operations:
+                    # Only parse the operation file if we haven't already done so
+                    all_operations[operation_file] = parse_operand_list(operation_file).make_operation()
+                operation = all_operations[operation_file]
+            result.add_operation(operation, operation_level, operation_probability)
+    for level, level_probabilities in enumerate(result.all_probabilities):
+        if not math.isclose(sum(level_probabilities), 1):
+            raise "Operation probabilities do not sum to 1 for level {}".format(level+1)
     return result
 
 

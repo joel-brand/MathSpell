@@ -24,10 +24,12 @@ def generate_eqn(splitter, target, max_terms=4):
         if next_node.leaf:
             # Failed to split
             continue
-        queue.append(next_node.left)
+        if not next_node.left.locked:
+            queue.append(next_node.left)
         if not next_node.right.locked:
             queue.append(next_node.right)
         terms += 1
+    init_node.use_large_division_at_top()
     return init_node.to_string()
 
 
@@ -47,7 +49,7 @@ def generate(cached_operation_list, phrase, op_file, pdf_title="", pdf_name="mat
 
 
 if __name__ == '__main__':
-    generate(dict(), "this is a test", "test.oplist")
+    generate(dict(), "this is a test", "example/example.oplist", "Math 8E 26th May")
     # while True:
     #     operation_list = dict()
     #     cmd = shlex.split(prompt_toolkit.prompt("> "))
