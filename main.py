@@ -1,153 +1,10 @@
 import numpy as np
-from itertools import combinations_with_replacement
-from functools import partial
-from pylatex.base_classes import Environment
-from pylatex.package import Package
-from pylatex import Document, Section
+import shlex
 from latex import create_pdf
-import sys
-
-class TermNode:
-
-    def __init__(self, value):
-        self.left = None
-        self.right = None
-        self.leaf = True
-        self.value = value
-
-    def split(self, op_list):
-
-        for _ in range(len(op_list)):
-            op = np.random.choice(op_list, replace=False)
-            result = op.split(self.value)
-            if result is None:
-                continue
-            self.left = TermNode(result[0])
-            self.right = TermNode(result[1])
-            self.value = op.symbol
-            self.leaf = False
-            return True
-
-        return False
-
-    def to_string(self, root=True):
-
-        if self.leaf:
-            return str(self.value)
-        else:
-            content = self.left.to_string(False) + self.value + self.right.to_string(False)
-            if root:
-                return content
-            else:
-                return "(" + content + ")"
-
-
-class Operation:
-
-    def __init__(self, symbol, split_function):
-        self.symbol = symbol
-        self.split_function = split_function
-
-    def split(self, value):
-        return self.split_function(value)
-
-
-def factorise(value, include_one=False):
-    factors = [(n, value // n) for n in range(2, int(value ** 0.5) + 1) if value % n == 0]
-    if include_one:
-        factors.append((1, value))
-    return factors
-
-
-def multiply(value, difficulty_filter=None):
-    factors = factorise(value)
-    if difficulty_filter is not None:
-        filtered = list(filter(difficulty_filter, factors))
-    else:
-        filtered = factors
-    k = len(filtered)
-    if k == 0:
-        return None
-    else:
-        return filtered[np.random.randint(k)]
-
-
-def divide(value, allowed_divisors):
-    divisor = np.random.choice(allowed_divisors)
-    return value * divisor, divisor
-
-
-def easy_divide(value):
-    if value > 12:
-        return None
-    divisor = np.random.randint(2, 12)
-    return value * divisor, divisor
-
-
-def multiply_factor_leq_12(value):
-    return multiply(value, lambda factors: factors[0] <= 12 or factors[1] <= 12)
-
-
-def divide_divisor_leq_12(value):
-    return divide(value, [i + 1 for i in range(1, 12)])
-
-
-def divide_divisor_bounded(value):
-    return divide(value, [i + 1 for i in range(1, min(12, 144 // value))])
-
-
-def multiply_predefined(value, multiply_map):
-    if value not in multiply_map:
-        return None
-    else:
-        factors = multiply_map[value]
-        return factors[np.random.randint(len(factors))]
-
-
-def get_predefined_multiply_factors():
-    result = dict()
-    # 12x12 times tables (excluding 1)
-    for i, j in combinations_with_replacement([k+1 for k in range(1, 12)], 2):
-        prod = i * j
-        if prod not in result:
-            result[prod] = list()
-        result[prod].append((i, j))
-
-    # We'll allow 'easy' multiplications up to a bound of 1000
-    for i in ([2] + [k * 10 for k in range(1, 100)]):
-        for j in range(13, 1000 // i):
-            prod = i * j
-            if prod not in result:
-                result[prod] = list()
-            result[prod].append((i, j))
-
-    # We'll allow 'easy-ish' multiplications up to a bound of 200
-    for i in [3, 4, 5, 11, 15]:
-        for j in range(13, 200 // i):
-            prod = i * j
-            if prod not in result:
-                result[prod] = list()
-            result[prod].append((i, j))
-
-
-    return result
-
-
-def add(value):
-    if value <= 1:
-        return None
-    left = value - np.random.randint(1, value-1)
-    return left, value-left
-
-
-def subtract(value):
-    right = np.random.randint(100)
-    return value+right, right
-
-
-def sqrt(value):
-    if (value ** 0.5).is_integer():
-        return ()
+import prompt_toolkit
+from term_tree import TermNode
+from operations import parse_operation_list
+from collections import deque
 
 
 def encode_phrase(phrase):
@@ -158,39 +15,48 @@ def encode_phrase(phrase):
     return encoding
 
 
-def generate_eqn(op_list, target, max_terms=2):
+def generate_eqn(splitter, target, max_terms=3):
     init_node = TermNode(target)
-    init_node.split(op_list)
-    init_node.left.split(op_list)
-    init_node.right.split(op_list)
+    queue = deque()
+    queue.append(init_node)
+    terms = 1
+    while terms < max_terms and len(queue) > 0:
+        next_node = queue.popleft()
+        next_node.split(splitter)
+        if next_node.leaf:
+            # Failed to split
+            continue
+        queue.append(next_node.left)
+        queue.append(next_node.right)
+        terms += 1
     return init_node.to_string()
 
 
-class AmsMath(Environment):
-    packages = [Package("amsmath")]
+def generate(cached_operation_list, phrase, op_file, pdf_title="", pdf_name="math_spell"):
 
+    splitter = parse_operation_list(op_file, cached_operation_list)
 
-def run(phrase, pdf_title, pdf_name="mathspell"):
-    predefined_multiply_factors = get_predefined_multiply_factors()
-    op_list = [
-        Operation("*", partial(multiply_predefined, multiply_map=predefined_multiply_factors)),
-        Operation("/", easy_divide),
-        Operation("+", add),
-        Operation("-", subtract)
-    ]
     phrase = phrase.lower()
+
     phrase_words = phrase.split()
     phrase_letters = "".join(phrase_words)
     encoding = encode_phrase(phrase_letters)
-    equations = [generate_eqn(op_list, encoding[c]) for c in phrase_letters]
 
-    doc = Document()
-    with doc.create(Section("Test")):
-        with doc.create(AmsMath()):
-            test = ""
+    equations = [generate_eqn(splitter, encoding[c]) for c in phrase_letters]
 
     create_pdf(pdf_title, pdf_name, phrase_words, encoding, equations)
 
 
 if __name__ == '__main__':
-    run(sys.argv[1], sys.argv[2])
+    generate(dict(), "this is a test", "test.oplist")
+    # while True:
+    #     operation_list = dict()
+    #     cmd = shlex.split(prompt_toolkit.prompt("> "))
+    #     if len(cmd) == 0:
+    #         continue
+    #     if cmd[0] == "exit":
+    #         break
+    #     if len(cmd) > 4:
+    #         print("Invalid command - format should be " +
+    #               "'\"<PHRASE>\" \"<OP_FILE>\" \"<(Optional)PDF_TITLE>\" \"<(Optional)PDF_NAME>\"")
+    #     generate(operation_list, *cmd)
