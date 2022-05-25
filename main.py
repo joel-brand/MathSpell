@@ -1,7 +1,5 @@
 import numpy as np
-import shlex
 from latex import create_pdf
-import prompt_toolkit
 from term_tree import TermNode
 from operations import parse_operation_list
 from collections import deque
@@ -15,7 +13,7 @@ def encode_phrase(phrase):
     return encoding
 
 
-def generate_eqn(splitter, target, max_terms=3):
+def generate_eqn(splitter, target, max_terms=4):
     init_node = TermNode(target)
     queue = deque()
     queue.append(init_node)
@@ -27,7 +25,8 @@ def generate_eqn(splitter, target, max_terms=3):
             # Failed to split
             continue
         queue.append(next_node.left)
-        queue.append(next_node.right)
+        if not next_node.right.locked:
+            queue.append(next_node.right)
         terms += 1
     return init_node.to_string()
 

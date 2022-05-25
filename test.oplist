@@ -1,4 +1,6 @@
-multiplication.op;0.4
-division.op;0.4
-addition.op;0.1
-subtraction.op;0.1
+multiplication.op;0.075
+division.op;0.075
+addition.op;0.025
+subtraction.op;0.025
+squares.op;0.4
+roots.op;0.4

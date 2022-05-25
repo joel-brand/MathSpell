@@ -33,7 +33,7 @@ def create_pdf(title, pdf_name, phrase_words, phrase_encoding, equations_list):
     with doc.create(MultiCols(arguments="2")):
         with doc.create(Enumerate()) as enum:
             for equation in equations_list:
-                enum.add_item(Math(data=[equation], inline=True))
+                enum.add_item(Math(data=[equation], inline=True, escape=False))
 
     # Print the blanks
     doc.append(VerticalSpace("1cm"))

@@ -4,14 +4,15 @@ import math
 
 class Operation:
 
-    def __init__(self, symbol, split_function):
+    def __init__(self, symbol, split_function, do_not_expand=False):
         self.symbol = symbol
         self.split_function = split_function
+        self.do_not_expand = do_not_expand
 
     def split(self, value):
         result = self.split_function(value)
         if result is not None:
-            return result + [self.symbol]
+            return result + [self.symbol, self.do_not_expand]
 
 
 class OperationList:
@@ -40,6 +41,8 @@ class OperandList:
     TYPE_DIVISION = "/"
     TYPE_ADDITION = "+"
     TYPE_SUBTRACTION = "-"
+    TYPE_EXPONENTIATION = "^"
+    TYPE_INVERSE_EXPONENTIATION = "^/"  # Have this as a separate type for now, to keep all the arithmetic as integers
 
     def __init__(self, list_type):
         self.list_type = list_type
@@ -57,6 +60,10 @@ class OperandList:
             return self.make_addition_operation()
         elif self.list_type == OperandList.TYPE_SUBTRACTION:
             return self.make_subtraction_operation()
+        elif self.list_type == OperandList.TYPE_EXPONENTIATION:
+            return self.make_exponentiation_operation()
+        elif self.list_type == OperandList.TYPE_INVERSE_EXPONENTIATION:
+            return self.make_inverse_exponentiation_operation()
 
     def make_multiplication_operation(self):
         def split(value):
@@ -101,6 +108,30 @@ class OperandList:
                         return [left, right]
 
         return Operation("-", split)
+
+    def make_exponentiation_operation(self):
+        def split(value):
+            for (op_1, op_2) in np.random.permutation(self.all_operand_pairs):
+                for exponent in op_2.get_shuffled_range():
+                    base = value ** (1/exponent)
+                    if not base.is_integer():
+                        continue
+                    base = int(base)
+                    if op_1.matches(base):
+                        return [base, exponent]
+        return Operation("^", split, do_not_expand=True)
+
+    def make_inverse_exponentiation_operation(self):
+        def split(value):
+            for (op_1, op_2) in np.random.permutation(self.all_operand_pairs):
+                for exponent in op_2.get_shuffled_range():
+                    base = value ** exponent
+                    if not base.is_integer():
+                        continue
+                    base = int(base)
+                    if op_1.matches(base):
+                        return [base, 1/exponent]
+        return Operation("^", split, do_not_expand=True)
 
 
 class Operand:
