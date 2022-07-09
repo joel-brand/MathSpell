@@ -3,17 +3,23 @@ from latex import create_pdf
 from term_tree import TermNode
 from operations import parse_operation_list
 from collections import deque
+from string import ascii_lowercase
 import shlex
 import prompt_toolkit
 import os.path
 
 
 def encode_phrase(phrase):
-    encoding = dict()
-    for char in phrase:
-        if char not in encoding:
-            encoding[char] = np.random.randint(0, 100)
-    return encoding
+    available = [i for i in range(100)]
+    np.random.shuffle(available)
+    return {c: available.pop() for c in ascii_lowercase}
+    # encoding = dict()
+    # available = [i for i in range(100)]
+    # np.random.shuffle(available)
+    # for char in phrase:
+    #     if char not in encoding:
+    #         encoding[char] = available.pop()  # np.random.randint(0, 100)
+    # return encoding
 
 
 def generate_eqn(splitter, target, max_terms=4):

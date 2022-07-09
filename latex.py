@@ -67,6 +67,6 @@ def create_pdf(title, pdf_name, phrase_words, phrase_encoding, equations_list):
                 if c in phrase_encoding:
                     enum.add_item(phrase_encoding[c])
                 else:
-                    enum.add_item(np.random.randint(100))
+                    raise "Whoops"
 
     doc.generate_pdf(pdf_name, clean_tex=False)
